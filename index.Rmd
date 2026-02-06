@@ -1,0 +1,812 @@
+---
+title: "Women’s BMI in Tanzania."
+subtitle: "Patterns and Determinants from the 2015 DHS"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    toc: true
+    toc_depth: 2
+    highlight: github
+    math: mathjax
+    number_sections: true
+author: "Ludovick L. Lopa"
+date: "July 4th, 2025"
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r echo = FALSE}
+# Load necessary packages
+
+pacman::p_load(
+  janitor,       # for data cleaning
+  here,          # to set the working directory
+  haven,         # for reading Stata files
+  tidyverse,     # for data manipulation and visualization
+  dlookr,        # for seeing the missing value count
+  gtsummary,     # for summary tables
+  scales,        # for axis formatting and plot scales
+  gt,            # for stylish tables
+  patchwork,     # for combining plots
+  RColorBrewer,  # for color palettes
+  plotly         # for interactive plots
+)
+```
+
+```{r echo = FALSE}
+# Import the .dta file and add the 5 malaria knowledge variables
+ir_tz_raw <- 
+  haven::read_dta(here("data/Tanzania_IR7BDT/TZIR7BFL.DTA"),
+                  col_select = c(
+            # Socio-demographic characteristics
+                    v012, v013, v106, v190, v025, v024, 
+                    v113, v115, v438, v437, sreg1,
+                    v501, v155,
+                    
+            # Behavioral and Lifestyle Factors
+                    v463a, v714, v717, s1107a,
+                    
+            # Reproductive & Maternal Health
+                    v213, v208, v201,
+                    
+            # Fitness & Health outcome variables
+                    v445, v457, v453))
+
+
+```
+
+```{r echo = FALSE}
+
+ir_tz_renamed <- 
+  ir_tz_raw %>% 
+  rename(age = v012,# Rename variables
+         age_group = v013,
+         region = v024,
+         zone = sreg1,
+         urban_rural = v025,
+         highest_educ = v106,
+         literacy = v155,
+         source_water = v113,
+         time_to_water = v115,
+         num_births_5yrs = v208,
+         current_pregn = v213,
+         height = v438,
+         weight = v437,
+         smoke_cigger = v463a,
+         marital_status = v501,
+         working = v714,
+         occupation_group = v717,
+         consume_alcohol = s1107a,
+         wealth_index = v190,
+         num_parity = v201,
+        
+         # Rename health and fitness outcome variables
+         bmi = v445,
+         anemia_level = v457,
+         hb_level = v453)
+
+#glimpse(ir_tz_renamed)
+```
+
+```{r echo = FALSE}
+# Add as_factor () from haven to convert from labelled data to regular factors
+ir_tz_factor <- 
+  ir_tz_renamed %>% 
+  haven::as_factor()
+
+# Converts the numeric variables that still appear categorical
+ir_tz_numeric <- 
+  ir_tz_factor %>% 
+  mutate(
+    hb_level = as.numeric(as.character(hb_level)),
+    height = as.numeric(as.character(height)),
+    bmi = as.numeric(as.character(bmi)),
+    weight = as.numeric(as.character(weight)),
+    time_to_water = as.numeric(as.character(time_to_water)),
+    num_parity = as.numeric(as.character(num_parity))
+    )
+  
+# Convert bmi, height, hb_level, and weight into respective decimal points
+ir_tz_final <- 
+  ir_tz_numeric %>% 
+  mutate(bmi = bmi/100,
+         height = height/10,
+         hb_level = hb_level/10,
+         weight = weight/10)
+  
+# Categorize BMI
+ir_tz_clean <- 
+  ir_tz_final %>% 
+  mutate(bmi_group = case_when(bmi < 18.5 ~ "Underweight",
+                               bmi >= 18.5 & bmi < 25 ~ "Normal Weight",
+                               bmi >= 25 & bmi < 30 ~ "Overweight",
+                               bmi >= 30 ~ "Obese"
+                         ))
+
+```
+
+```{r echo = FALSE, eval=FALSE}
+
+# Use the `diagnose()` function to see the missing value count
+diagnose(ir_tz_clean) 
+```
+
+## Introduction
+
+The Demographic and Health Survey (DHS) is a key source of reliable data on population health in developing countries. In Tanzania, seven DHS surveys have been conducted between 1991 and 2022, helping to track progress in health and living standards over time.<sup>1</sup> The main goal of DHS is to provide up-to-date information that supports evidence-based decision-making at national and international levels.
+
+This brief draws on data from the 2015 Tanzania Demographic and Health Survey (DHS), focusing on a nationally representative sample of 13,266 women from all 30 regions— 25 in mainland Tanzania and 5 in Zanzibar.<sup>2</sup> The regions were grouped according to Tanzania’s nine geographic zones and further stratified into rural and urban areas to enable meaningful comparisons across different population groups.
+
+![**Figure 1.** Regions of Tanzania (*Source: DHS 2022*).](images/tanzania_regions.jpg)
+
+The brief analyzes the patterns and determinants of elevated Body Mass Index (BMI) among women in Tanzania. BMI is a widely used measure of nutritional status and a key risk factor for non-communicable diseases. The World Health Organization (WHO) classifies BMI as follows: underweight (\<18.5 kg/m²), normal weight (18.5–24.9 kg/m²), overweight (25.0–29.9 kg/m²), and obese (≥30.0 kg/m²).<sup>3</sup> By examining BMI trends, this brief offers critical insights into the physical health and nutritional well-being of Tanzanian women.
+
+## Objectives
+
+This report has two main objectives:
+
+-   To describe the patterns of BMI among women in Tanzania.
+
+-   To identify key socio-demographic and related factors associated with variations in BMI.
+
+## Demographic Characteristics
+
+Table 1 presents the general demographic and health characteristics of women from the Tanzania's 2015 DHS women’s recode dataset, stratified by urban and rural residence. Women residing in urban areas had a higher median weight of 56.5 kg (IQR = 15.8), compared to 53.6 kg (IQR = 11.9) among their rural counterparts. Similarly, the median BMI was higher among urban women at 23.1 kg/m² (IQR = 5.9) compared to 22.9 kg/m² (IQR = 4.3) in rural areas.
+
+In contrast, respondents from rural areas reported a higher number of deliveries, with a median parity of 3 (IQR = 4), compared to 2 (IQR = 4) among urban women. There were no substantial differences between the two groups in terms of height, haemoglobin levels, smoking status, or alcohol consumption.
+
+```{r echo = FALSE}
+# Create the summary table using gt and gtsummary packages
+Table_1 <- 
+  ir_tz_clean %>%
+  # selects variables of interest
+  select(urban_rural, age, weight, height, bmi, hb_level, num_parity, 
+          smoke_cigger, consume_alcohol, time_to_water) %>%
+  
+  # Capitalizes binary variables.
+    mutate(urban_rural = ifelse(urban_rural == "urban", "Urban", "Rural"),
+           consume_alcohol = ifelse(consume_alcohol == "yes", "Yes", "No")) %>% 
+  
+  # Filter NA in all selected variables.
+  filter(!is.na(age) & !is.na(weight) & !is.na(time_to_water) & !is.na(height) & 
+         !is.na(num_parity) & !is.na(bmi) & !is.na(hb_level) &
+         !is.na(smoke_cigger) & !is.na(consume_alcohol)) %>%
+  
+  # Table summarization with gt_summary ()
+  
+
+  tbl_summary(by = urban_rural, # stratification by residence
+    label = list(               # Create labels of the table
+      age ~ "Age (years)",
+      weight ~ "Weight (kg)",
+      height ~ "Height (cm)",
+      time_to_water ~ "Time to water source (minutes)",
+      num_parity ~ "Number of Deliveries (Parity)",
+      bmi ~ "Body Mass Index (BMI)",
+      smoke_cigger ~ "Smokes Cigarettes",
+      consume_alcohol ~ "Ever Consumed Alcohol",
+      hb_level ~ "Haemoglobin Level (mg/dL)"),
+    statistic = all_continuous() ~ "{median} ({IQR})",  # calculates median and IQR
+    digits = all_continuous() ~ 1) %>%  # Changes points to one decimal.
+  add_p(test = all_continuous()  ~ "t.test") %>%  # Add p-values
+  
+  # Labeling the titles and headers of  columns and rows
+  modify_header(label ~ "**Characteristic**") %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Residence**") %>%
+  modify_caption(
+    "**Table 1.** Demographic characteristics by place of residence.") %>% 
+  
+  # Converts to gt table and add borders to the table
+  as_gt() %>%
+  tab_options(
+  table.border.top.color = "black",
+  table.border.bottom.color = "black",
+  column_labels.border.top.color = "white",
+  column_labels.border.bottom.color = "black",
+  row_group.border.bottom.color = "black",
+  heading.border.bottom.color = "black",
+  row.striping.background_color = "black",
+  table_body.hlines.color = "black",
+  column_labels.background.color = "white") %>% 
+  tab_style(
+    style = cell_fill(color = "skyblue"),
+    locations = cells_body( rows = c(1, 3, 5, 7, 9)))
+
+Table_1
+
+#gtsave(data = Table_1, 
+       #filename = "Table_One.pdf",
+       #path = here("output"))
+
+
+
+```
+
+```{r echo = FALSE}
+#Save the re-usable functions for tables 
+
+my_gt_theme <-  
+  function(gt_tbl) {
+    gt_tbl %>% 
+      tab_options(
+  table.border.top.color = "black",
+  table.border.bottom.color = "black",
+  column_labels.border.top.color = "white",
+  column_labels.border.bottom.color = "black",
+  row_group.border.bottom.color = "black",
+  heading.border.bottom.color = "black",
+  row.striping.background_color = "black",
+  table_body.hlines.color = "black",
+  column_labels.background.color = "white")
+  }
+```
+
+Figure 2 illustrates the distribution of the wealth index by residence— urban (left) versus rural (right). Women living in urban areas were three times more likely to fall in the richer or richest categories (89.8%) compared to their rural counterparts (30.6%). Women in rural areas were over eight times more likely to be in the poor or poorest wealth categories (44.8%) than those in urban settings (5.4%).
+
+```{r echo = FALSE}
+
+# Create mini-dataset for the pattern of wealth by residence
+
+wealth_res_pie <- 
+  ir_tz_clean %>%
+  count(urban_rural, wealth_index) %>%
+  group_by(urban_rural) %>%
+  mutate(proportion = n / sum(n),
+         label = percent(proportion, accuracy = 1),
+         ypos = cumsum(proportion) - 0.5*proportion)
+
+# Subset rural data
+rural_data <- 
+  wealth_res_pie %>%
+  filter(urban_rural == "rural") %>%
+  arrange(desc(wealth_index)) %>%
+  mutate(financial_status = case_when(
+    wealth_index == "richer" ~ "Richer",
+    wealth_index == "poorer" ~ "Poorer",
+    wealth_index == "richest" ~ "Richest",
+    wealth_index == "poorest" ~ "Poorest",
+    wealth_index == "middle" ~ "Middle"))
+
+
+# Rural pie chart (right side)
+rural_pie <- 
+  plot_ly(data = rural_data,
+          labels = ~financial_status,
+          values = ~proportion,
+          type = 'pie',
+          textinfo = 'percent',
+          insidetextorientation = 'radial',
+          name = "Rural",
+          legendgroup = "wealth",
+          showlegend = FALSE,domain = list(x = c(0.6, 1))) # 
+
+
+# Subset urban data
+urban_data <- 
+  wealth_res_pie %>%
+  filter(urban_rural == "urban") %>%
+  arrange(desc(wealth_index)) %>%
+  mutate(financial_status = case_when(
+    wealth_index == "richer" ~ "Richer",
+    wealth_index == "poorer" ~ "Poorer",
+    wealth_index == "richest" ~ "Richest",
+    wealth_index == "poorest" ~ "Poorest",
+    wealth_index == "middle" ~ "Middle"))
+
+# Urban pie chart (left side)
+urban_pie <- 
+  plot_ly(data = urban_data,
+          labels = ~financial_status,
+          values = ~proportion,
+          type = 'pie',
+          textinfo = 'percent',
+          insidetextorientation = 'radial',
+          name = "Urban",
+          legendgroup = "wealth",
+          showlegend = TRUE,
+          domain = list(x = c(0, 0.4))) 
+
+# Combine in one layout manually
+final_plot <- 
+  subplot(urban_pie, 
+          rural_pie, 
+          nrows = 1) %>%
+  layout(showlegend = TRUE, # change legend position
+         legend = list(
+           orientation = "h",
+           x = 0.5,
+           xanchor = "center",
+           y = 1.1),
+    margin = list(t = 50, b = 100),  # Allow space for bottom title
+    annotations = list(
+      # bold word Figure 2 to have same outlook as other figures.
+      list(text = "<b>Figure 2.</b> Wealth Index Distribution by Residence", 
+           x = 0.5,
+           y = -0.2,
+           showarrow = FALSE,
+           xref = 'paper',
+           yref = 'paper',
+           xanchor = 'center',
+           yanchor = 'bottom',
+           font = list(size = 14))))
+
+final_plot
+
+
+```
+
+Table 2 presents the highest educational attainment by place of residence. At least 81.4% of women in rural areas had primary education or higher, compared to 93.8% of women in urban areas.
+
+```{r echo = FALSE}
+# create a table for other demographic characteristics
+
+# Create summary table for level of education
+Table_2 <- 
+  ir_tz_clean %>%
+  select(urban_rural, highest_educ) %>%
+  
+  # Capitalize category names
+  mutate(urban_rural = ifelse(urban_rural == "urban", "Urban", "Rural"),
+         highest_educ = case_when
+         (highest_educ == "no education" ~ "No Education",
+           highest_educ == "primary" ~ "Primary",
+           highest_educ == "secondary" ~ "Secondary",
+           highest_educ == "higher" ~ "Higher",
+           TRUE ~ highest_educ),
+         highest_educ = 
+           factor(highest_educ, #creates the order from no education to higher.
+                  levels = c("No Education", "Primary", 
+                             "Secondary", "Higher"))) %>% 
+  
+  # Filter NA in all selected variables.
+  filter(!is.na(urban_rural) & !is.na(highest_educ)) %>%
+  
+  # Table summarization with gt_summary ()
+  tbl_summary(by = urban_rural, # stratification by residence
+    label = list(               # Create labels of the table
+      highest_educ ~ "Highest education"))%>% 
+  add_p(test = all_continuous()  ~ "t.test") %>%  # Add p-values
+  
+  # Labeling the titles and headers of  columns and rows
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Residence**") %>%
+  modify_caption(
+    "**Table 2.** Educational attainment by place of residence.") %>% 
+  
+  # Converts to gt table and add borders to the table
+  as_gt() 
+
+
+Table_2 %>% 
+  my_gt_theme() %>% 
+   tab_style(
+    style = cell_fill(color = "skyblue"),
+    locations = cells_body( rows = c(1, 3, 5)))
+
+#gtsave(data = Table_2, 
+       #filename = "Table_Two.pdf",
+       #path = here("output"))
+
+```
+
+```{r echo = FALSE}
+# Create the default theme for all ggplot2 figures
+theme_set(theme_bw() +
+    theme(plot.title = element_text (size = 15, face = "bold", 
+                                     hjust = 0, margin = margin(b = 10),),
+          axis.title.x = element_text(size = 14,
+                                      margin = margin(t = 10)),
+          axis.title.y = element_text(size = 14,
+                                      margin = margin(r = 10)),
+          plot.subtitle = element_text(size = 15, face = "italic", hjust = 0),
+          plot.caption = element_text(size = 15, face = "bold", hjust = 1),
+          text = element_text(size = 15),
+          legend.position = "bottom"))
+```
+
+## Understanding the Determinants of BMI
+
+### BMI Distribution by Age
+
+Increasing age was positively associated with higher mean BMI, with older participants exhibiting significantly higher average BMI compared to adolescents.
+
+```{r echo = FALSE}
+# BMI patterns by Age
+
+age_bmi <- ir_tz_clean %>% 
+  select(age, bmi_group) %>% 
+  group_by(bmi_group)
+
+#age_bmi
+
+age_bmi_plot <- 
+  ir_tz_clean %>%
+  filter(!is.na(age) & !is.na(bmi_group)) %>% 
+  mutate(bmi_group = factor(bmi_group, 
+                            levels = c("Underweight", "Normal Weight", 
+                                       "Overweight", "Obese"))) %>% 
+  ggplot(aes(x = bmi_group, 
+             y = age)) +
+  geom_boxplot(fill = "forestgreen", color = "black", alpha = 0.7) +
+  geom_jitter(alpha = 0.09,
+              color = "pink") +
+   stat_summary(geom = "point",
+                shape = 23,        # diamond
+                size = 3,
+                fill = "orange",color = "black")+ 
+  labs(title = expression(bold("Figure 3.") * " Body Mass Index patterns by Age"),
+       x = "BMI (kg/m²)",
+       y = "Age (years)")
+
+age_bmi_plot
+```
+
+### BMI Distribution by Level of Education
+
+Higher educational attainment was associated with an increase in mean BMI. Individuals with no formal education had a mean BMI of 22.8kg/m² (SD = 4.0), which was notably lower than the 26.7kg/m² (SD = 6.0) observed among those with higher education
+
+```{r echo = FALSE}
+
+# BMI patterns by education level
+
+sum_edu_bmi <- ir_tz_clean %>% 
+  select(highest_educ, bmi) %>% 
+  group_by(highest_educ) %>% 
+  skimr::skim()
+
+#sum_edu_bmi
+
+bmi_educ_plot <- 
+  ir_tz_clean %>%
+  mutate( highest_educ = case_when
+         (highest_educ == "no education" ~ "No Education",
+           highest_educ == "primary" ~ "Primary",
+           highest_educ == "secondary" ~ "Secondary",
+           highest_educ == "higher" ~ "Higher",
+           TRUE ~ highest_educ),
+          highest_educ = 
+           factor(highest_educ, #creates the order from no education to higher.
+                  levels = c("No Education", "Primary", 
+                             "Secondary", "Higher"))) %>% 
+  ggplot(aes(x = highest_educ, 
+             y = bmi)) +
+  geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_jitter(alpha = 0.09,
+              color = "red") +
+   stat_summary(geom = "point",
+                shape = 23,        # diamond
+                size = 3,
+                fill = "orange",color = "black")+ 
+  labs(title = expression(bold("Figure 4.") * " Body Mass Index patterns by highest education"),
+       x = "Level of Education",
+       y = "BMI (kg/m²)") 
+
+bmi_educ_plot
+```
+
+### BMI Distribution by Wealth Index
+
+In the 2015 DHS data, women's BMI was influenced by wealth status. As wealth increased from the poorest to the richest groups, the proportion of overweight or obese women rose from 13% to 46%, while the proportion with normal weight dropped from 76% to 47%.
+
+```{r echo = FALSE}
+
+# BMI distribution by Wealth Index 
+plot_data <- ir_tz_clean %>%
+  mutate(bmi_group = factor(bmi_group, 
+                            levels = c("Underweight", "Normal Weight", 
+                                       "Overweight", "Obese")),
+         wealth_index = case_when(
+           wealth_index == "richer" ~ "Richer",
+           wealth_index == "poorer" ~ "Poorer",
+           wealth_index == "richest" ~ "Richest",
+           wealth_index == "poorest" ~ "Poorest",
+           wealth_index == "middle" ~ "Middle"),
+        wealth_index = factor(wealth_index, 
+                            levels = c("Poorest", "Poorer", 
+                                       "Middle", "Richer", "Richest"))) %>%
+ filter(!is.na(wealth_index), !is.na(bmi_group)) %>% 
+  count(wealth_index, bmi_group) %>%
+  group_by(wealth_index) %>%
+  mutate(prop = n / sum(n))  # calculate proportion
+
+# Plot
+ggplot(plot_data, aes(x = wealth_index, y = prop, fill = bmi_group)) +
+  geom_col(position = "stack") +
+  geom_text(aes(label = scales::percent(prop, accuracy = 1)), 
+            position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = expression(bold("Figure 5.") * " BMI Group Distribution by Wealth Index"),
+       x = "Wealth Index",
+       y = "Proportion",
+    fill = NULL) +
+  theme_classic()
+
+```
+
+### BMI Distribution by Parity
+
+The number of children ever born (parity) was positively associated with the respondent’s BMI. As mean parity increased, there was a corresponding increase in BMI (Figure 5).
+
+```{r echo = FALSE}
+
+#BMI relationship to parity
+
+ir_tz_clean %>%
+  filter(!is.na(num_parity) & !is.na(bmi_group)) %>%
+  mutate(bmi_group = factor(
+    bmi_group, 
+    levels = c("Underweight", "Normal Weight", "Overweight", "Obese"))) %>%
+  group_by(bmi_group) %>%
+  summarise(mean_parity = mean(num_parity, na.rm = TRUE)) %>%
+  ggplot(aes(x = bmi_group, 
+             y = mean_parity)) +
+  geom_col(fill = "#69b3a2", width = 0.6) + 
+  geom_point(size = 3, 
+             color = "#1b2838") +
+  geom_line(group = 1,
+            color = "#1b2838", 
+            linetype = "solid") +
+  theme(plot.title = element_text (size = 16, face = "bold", 
+                                     hjust = 0, margin = margin(b = 10),),
+        axis.title.x = element_text(size = 13,
+                                      margin = margin(t = 10)),
+        axis.title.y = element_text(size = 13,
+                                      margin = margin(r = 10)),
+        text = element_text(size = 12)) +
+  
+  labs(title = expression(bold("Figure 6.") * 
+                            " Relationship between average parity and BMI"),
+       x = "Body Mass Index",
+       y = "Average Parity") +
+  
+  # Classic theme (overrides theme_bw)
+  theme_classic(base_size = 13) 
+
+
+```
+
+### BMI Distribution by Alcohol Consumption
+
+Alcohol consumption was associated with higher BMI levels. As illustrated in Figure 6, the proportion of participants who were overweight or obese was greater among those who had consumed alcohol (34%) compared to those who had never consumed alcohol (27%).
+
+```{r echo = FALSE}
+
+#Alcohol effect on BMI
+
+plot_data2 <- 
+  ir_tz_clean %>%
+  filter(!is.na(consume_alcohol) & !is.na(bmi_group)) %>% 
+  mutate(bmi_group = factor(bmi_group, 
+                  levels = c("Underweight", "Normal Weight", 
+                             "Overweight", "Obese")),
+         consume_alcohol = case_when(consume_alcohol == "no" ~ "No",
+                                     consume_alcohol == "yes" ~ "Yes")) %>%
+  group_by(consume_alcohol) %>%
+  count(bmi_group, name = "n") %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+
+plot_data2 %>% 
+  ggplot(aes(x = consume_alcohol, 
+             y = prop, 
+             fill = bmi_group)) +
+  geom_col(position = "stack", width = 0.5)  + 
+  geom_text(aes(label = scales::percent(prop, accuracy = 1)), 
+            position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = expression(bold("Figure 7.") * " BMI Patterns by Alcohol consumption"),
+    x = "Ever consumed alcohol",
+    y = "Proportion of respondents",
+    fill = NULL) +
+  theme_classic()
+
+
+
+```
+
+### Geographical Variation in BMI Across Tanzanian Zones
+
+The prevalence of overweight and obesity among women was highest in the Eastern (42%), Zanzibar (38%), and Northern (36%) zones. In contrast, the Lake zone had the lowest combined proportion at just 18%. This represents a twofold or greater difference between the highest and lowest zones.
+
+```{r echo = FALSE}
+
+# Do BMI varies across regional zones?
+
+bmi_zone <- ir_tz_clean %>%
+  filter(!is.na(zone), !is.na(bmi_group)) %>%
+  mutate(bmi_group = factor(bmi_group, 
+                            levels = c("Underweight", "Normal Weight", 
+                                       "Overweight", "Obese")),
+         zone = case_when(zone == "lake" ~ "Lake",
+                          zone == "western" ~ "Western",
+                          zone == "eastern" ~ "Eastern",
+                          zone == "zanzibar" ~ "Zanzibar",
+                          zone == "northern" ~ "Northern",
+                          zone == "central" ~ "Central",
+                          zone == "south west highlands" ~ "South West Highlands",
+                          zone == "southern highlands" ~ "Southern Highlands",
+                          zone == "southern" ~ "Southern")) %>%
+  group_by(zone, bmi_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(zone) %>%
+  mutate(prop = n / sum(n),
+         label = scales::percent(prop, accuracy = 1))
+
+# Plot
+bmi_zone %>%
+  ggplot(aes(x = fct_reorder(zone, -prop), 
+             y = prop, 
+             fill = bmi_group)) +
+  geom_col(position = "fill",
+           width = 0.9) +
+  geom_text(aes(label = label), 
+            position = position_fill(vjust = 0.5), 
+            color = "white", size = 3.5) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = expression(bold("Figure 8.") *  " Geographical Variation of BMI."),
+    x = "Zone",
+    y = "Proportion of Respondents",
+    fill = NULL) +
+  coord_flip() +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+```
+
+### BMI Distribution by Occupational Group
+
+Individuals working as professional/technical/managerial (56.3%), in clerical (47.4%), and service-related occupations—such as shopkeepers, waitstaff, drivers, and security guards (45.3%)—had the highest proportions of overweight and obesity. In contrast, those engaged in agricultural work, whether self-employed (19.9%) or employed (26.9%), had considerably lower rates. Interestingly, respondents who reported not working had the second-lowest proportion of overweight and obesity at 23.1%. However, the analysis showed that they had a mean age of 23 years, with a standard deviation of 8 years.
+
+```{r echo = FALSE}
+
+# BMI patterns by occupational group 
+
+table_3 <- ir_tz_clean %>%
+  select(bmi_group, occupation_group) %>%
+  mutate(
+    occupation_group = case_when(
+      occupation_group == "not working" ~ "Not Working",
+      occupation_group == "professional/technical/managerial" ~ "Professional/Technical/Managerial",
+      occupation_group == "clerical" ~ "Clerical",
+      occupation_group == "agricultural - self employed" ~ "Agricultural - Self employed",
+      occupation_group == "agricultural - employee" ~ "Agricultural - Employee",
+      occupation_group == "household and domestic" ~ "Household & Domestic",
+      occupation_group == "services" ~ "Services",
+      occupation_group == "skilled manual" ~ "Skilled Manual",
+      occupation_group == "unskilled manual" ~ "Unskilled Manual",
+      TRUE ~ occupation_group
+    ),
+    bmi_group = factor(bmi_group, levels = c("Underweight", "Normal Weight", "Overweight", "Obese"))
+  ) %>%
+  filter(!is.na(bmi_group) & !is.na(occupation_group)) %>% 
+
+# Count and calculate horizontal proportions
+
+  count(occupation_group, 
+        bmi_group, 
+        name = "n") %>%
+  group_by(occupation_group) %>%
+  mutate(total = sum(n),
+    prop_h = round(n / total * 100, 1),
+    label = paste0(n, " (", prop_h, "%)")) %>%
+  select(occupation_group, bmi_group, label) %>%
+  pivot_wider(names_from = bmi_group, values_from = label) %>%
+  arrange(occupation_group) %>% 
+  ungroup() %>%  # This removes any leftover grouping from dplyr
+  gt(rowname_col = "occupation_group") %>%     # Display with gt
+  tab_header(title = md("**Table 3.** BMI Distribution Within Each Occupation Group")) %>%
+  cols_label(`Underweight` = "Underweight",
+             `Normal Weight` = "Normal Weight",
+             `Overweight` = "Overweight",
+             `Obese` = "Obese") 
+
+table_3 %>% 
+  my_gt_theme() %>% 
+   tab_style(
+    style = cell_fill(color = "skyblue"),
+    locations = cells_body( rows = c(1, 3, 5, 7, 9)))
+
+
+# Understanding why individuals who aren't working have healthier BMIs
+
+#ir_tz_clean %>%
+  #filter(occupation_group == "not working") %>%
+  #summarise(mean_age = mean(age, na.rm = TRUE),
+            #sd = sd(age, na.rm = TRUE))
+
+
+#gtsave(data = table_3, 
+       #filename = "Table_Three.pdf",
+       #path = here("output"))
+
+
+```
+
+### BMI Distributions by Marital Status
+
+Respondents who had ever been married or lived with a partner were more likely to be overweight or obese than those who had never been in a union. About 35% of married participants had elevated BMI, compared to only 17% among those who had never lived with a partner.
+
+```{r echo = FALSE}
+
+# BMI patterns by sexual relationship
+
+bmi_marital <- ir_tz_clean %>%
+  filter(!is.na(marital_status), !is.na(bmi_group)) %>%
+  mutate(bmi_group = factor(bmi_group, 
+                          levels = c("Underweight", "Normal Weight", 
+                                     "Overweight", "Obese")),
+       marital_status = case_when(
+         marital_status == "married" ~ "Married",
+         marital_status == "never in union" ~ "Never in Union",
+         marital_status == "divorced" ~ "Divorced",
+         marital_status == "no longer living together/separated" ~ "Separated",
+         marital_status == "widowed" ~ "Widowed",
+         marital_status == "living with partner" ~ "Living with partner",
+         TRUE ~ marital_status  # Preserve other values
+       )) %>%
+  group_by(marital_status, bmi_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(marital_status) %>%
+  mutate(prop = n / sum(n),
+         label = scales::percent(prop, accuracy = 1))
+
+# Plot
+bmi_marital %>%
+  ggplot(aes(x = fct_reorder(marital_status, -prop), 
+             y = prop, 
+             fill = bmi_group)) +
+  geom_col(position = "fill", width = 0.8) +
+  geom_text(aes(label = label), 
+            position = position_fill(vjust = 0.5), 
+            color = "white", size = 3.5) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = expression(bold("Figure 9.") *  " Distribution of BMI by Marital Status."),
+    x = "Marital Status",
+    y = "Proportion of Respondents",
+    fill = NULL) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  coord_flip()
+```
+
+## Discussion
+
+### Overweight and Obesity in Tanzania: A Growing Concern
+
+Overweight and obesity are well-established risk factors for a range of non-communicable diseases (NCDs), including cardiovascular disease, type II diabetes, sleep apnea, and certain cancers such as breast and ovarian cancer. In recent decades, Tanzania has undergone rapid urbanization and lifestyle transitions that have significantly influenced the determinants of elevated body mass index (BMI) in both urban and rural populations—contributing to a growing epidemic of NCDs.<sup>4</sup>
+
+Analysis of the 2015 Tanzania Demographic and Health Survey (DHS) women’s dataset reveals a positive association between elevated BMI and several sociodemographic and behavioral factors. These include higher levels of education, increased household wealth, higher parity (number of births), sedentary lifestyles, and alcohol consumption. When combined with increased caloric intake, these factors significantly heighten the risk of developing overweight and obesity.
+
+Geographic disparities were also observed, with women residing in urban areas and in the Eastern, Northern, and Zanzibar zones exhibiting higher BMI levels. This may reflect a greater concentration of individuals exposed to the previously mentioned risk factors. Moreover, occupations characterized by low levels of physical exertion—more common in urban than rural settings—were associated with higher BMI, reinforcing the connection between sedentary work environments and weight gain.
+
+![**Figure 10.** Motherhood is linked to a higher risk of elevated BMI (*Picture: Global Volunteers*).](images/being_mom.jpg)
+
+Relationship status further influenced BMI outcomes. Women who were married, divorced, separated, or had previously cohabited with a partner were more likely to have elevated BMI. This may be partly attributable to higher age and parity among these groups, both of which are independent predictors of increased BMI. In contrast, women who had never been in a formal relationship were more likely to fall within lower BMI categories.
+
+These findings underscore the need for targeted health promotion interventions that address behavioral risk factors and sedentary lifestyles, particularly among urban populations and individuals in low-activity occupations. Integrating awareness campaigns, workplace wellness programs, and community-based strategies could be critical in curbing the rising burden of obesity-related health risks in Tanzania.
+
+### Limitations of the Brief
+
+-   **Lack of Weighted Analysis.** The analysis did not apply sampling weights, which may limit the representativeness and generalizability of the findings to the national population.
+
+-   **Omission of Key Behavioral Variables.** Important determinants such as the amount of time allocated to physical activity and the quantity of alcohol consumed per week were not included in the analysis due to data limitations.
+
+## Conclusion
+
+This brief highlights key sociodemographic and behavioral factors associated with elevated Body Mass Index (BMI) among women in Tanzania. Higher BMI was positively associated with increasing age, higher levels of education and household wealth, greater parity, alcohol consumption, sedentary occupations, urban residence, specific geographic zones such as the Eastern zone, and being in a marital or cohabiting relationship. These findings reflect the rising burden of non-communicable disease (NCD) risk factors in Tanzania, and the urgent need for targeted health promotion interventions.
+
+## References
+
+-   R Basics & Beyond Bootcamp 2025 Q2. <https://thegraphcourses.org/courses/rbb-2025-q2/>
+
+-   Tanzania Demographic and Health Survey and Malaria Indicator Survey 2022 Key Indicators Report. <https://dhsprogram.com/pubs/pdf/PR144/PPR144.pdf>
+
+-   Obesity : preventing and managing the global epidemic : report of a WHO Consultation on Obesity, Geneva, 3-5 June 1997. <https://iris.who.int/handle/10665/63854>
+
+-   Obesity epidemic in urban Tanzania: a public health calamity in an already overwhelmed and fragmented health system. <https://bmcendocrdisord.biomedcentral.com/articles/10.1186/s12902-020-00631-3>
